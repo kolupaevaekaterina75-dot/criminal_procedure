@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+db.sqlite3
+media/
+venv/
+.vscode/
+poetry.lock
+htmlcov/
+.pytest_cache/
+coverage.xml

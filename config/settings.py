@@ -44,7 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'procedure',
-    "documents",
+    'documents.apps.DocumentsConfig',
 ]
 
 MIDDLEWARE = [

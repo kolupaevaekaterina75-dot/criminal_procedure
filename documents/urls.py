@@ -3,9 +3,9 @@ from . import views
 
 urlpatterns = [
     # Участники
-    path('participants/', views.participant_list, name='participant_list'),
-    path('participants/create/', views.participant_create, name='participant_create'),
-    # participant_edit, participant_delete — по аналогии
+    path('participants/', views.ParticipantList.as_view(), name='participant_list'),
+    # Если participant_create ещё не создан — закомментируйте эту строку, пока не добавите функцию
+    # path('participants/create/', views.participant_create, name='participant_create'),
 
     # Документы
     path('documents/', views.document_list, name='document_list'),

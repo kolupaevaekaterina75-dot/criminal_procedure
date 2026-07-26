@@ -5,10 +5,9 @@ class DocumentForm(forms.ModelForm):
     class Meta:
         model = Document
         fields = [
-            "title", "doc_type", "date", "location",
-            "participant", "start_time", "end_time",
-            # добавь сюда специфичные поля, если они есть в модели и нужны в шаблонах:
-            "object_description", "items_found", "target_action", "deadline", "reason"
+            'target_action',
+            'object_description',
+            # ...
         ]
 
     def clean(self):

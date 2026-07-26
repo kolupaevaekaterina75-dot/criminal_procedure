@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ doc }} — просмотр документа</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1, h3, h4 { margin-top: 1.2em; }
+    strong { color: #333; }
+    pre { background:#f5f5f5; padding:8px; border:1px solid #ccc; white-space:pre-wrap; }
+    .btn { display: inline-block; padding: 8px 16px; border-radius: 4px; text-decoration: none; margin-right: 8px; }
+    .btn-back { background-color: #ccc; color: #000; }
+    .btn-download { background-color: #007bff; color: white; }
+    hr { border: 0; border-top: 1px solid #ddd; margin: 1.5rem 0; }
+  </style>
+</head>
+<body>
+  <h1>{{ doc }}</h1>
+
+  <p>
+    <strong>Статус:</strong> {{ doc.get_status_display }}<br>
+    <strong>Вид документа:</strong> {{ doc.doc_type.name }}<br>
+    <strong>Дата составления:</strong> {{ doc.issue_date|date:"d.m.Y" }}<br>
+    <strong>Номер дела:</strong> {{ doc.case_number }}
+  </p>
+
+  <hr>
+
+  <div>
+    <h3>Основные сведения</h3>
+    <p><strong>Место составления:</strong> {{ doc.location|default:"Не указано" }}</p>
+    <p><strong>Место проведения:</strong> {{ doc.place|default:"Не указано" }}</p>
+    <p>
+      <strong>Время:</strong>
+      {% if doc.start_time and doc.end_time %}
+        С {{ doc.start_time|time:"H:i" }} до {{ doc.end_time|time:"H:i" }}
+      {% elif doc.time %}
+        {{ doc.time|time:"H:i" }}
+      {% else %}
+        Не указано
+      {% endif %}
+    </p>
+  </div>
+
+  <hr>
+
+  <div>
+    <h3>Участники</h3>
+    {% if doc.participant %}
+      <p><strong>Участник:</strong> {{ doc.participant.full_name }} ({{ doc.participant.get_role_display }})</p>
+    {% endif %}
+    {% if doc.investigator %}
+      <p><strong>Следователь:</strong> {{ doc.investigator.full_name }} ({{ doc.investigator.position }})</p>
+    {% endif %}
+    {% if doc.author %}
+      <p><strong>Автор:</strong> {{ doc.author.full_name }} ({{ doc.author.position }})</p>
+    {% endif %}
+    {% if doc.specialist %}
+      <p><strong>Специалист:</strong> {{ doc.specialist.full_name }} ({{ doc.specialist.position }}, {{ doc.specialist.organization }})</p>
+    {% endif %}
+    {% if doc.witness1 %}
+      <p><strong>Понятой 1:</strong> {{ doc.witness1.full_name }}</p>
+    {% endif %}
+    {% if doc.witness2 %}
+      <p><strong>Понятой 2:</strong> {{ doc.witness2.full_name }}</p>
+    {% endif %}
+  </div>
+
+  <hr>
+
+  <h3>Содержание документа</h3>
+  {% if doc.crime_description or doc.investigation_circumstances %}
+    <p><strong>Описание преступления / обстоятельства расследования:</strong></p>
+    <pre>{{ doc.crime_description|default:"" }}{{ doc.investigation_circumstances|default:"" }}</pre>
+  {% endif %}
+
+  {% if doc.object_inspection or doc.inspection_results %}
+    <h4>Осмотр</h4>
+    <p><strong>Объект осмотра:</strong> {{ doc.object_inspection|default:"Не указан" }}</p>
+    <p><strong>Результаты:</strong></p>
+    <pre>{{ doc.inspection_results|default:"" }}</pre>
+    <p><strong>Методы:</strong> {{ doc.examination_methods|default:"Не указаны" }}</p>
+    <p><strong>Изъятое:</strong> {{ doc.seized_items|default:"Нет" }}</p>
+    <p><strong>Условия:</strong> погода — {{ doc.weather_conditions }}, освещение — {{ doc.lighting_conditions }}</p>
+  {% endif %}
+
+  {% if doc.to_do or doc.required_actions %}
+    <h4>Поручения / действия</h4>
+    <p><strong>Что необходимо / выполнено:</strong></p>
+    <pre>{{ doc.to_do|default:"" }}{{ doc.required_actions|default:"" }}</pre>
+  {% endif %}
+
+  {% if doc.content %}
+    <h4>Текст документа</h4>
+    <pre>{{ doc.content }}</pre>
+  {% endif %}
+
+  <hr>
+
+  <div>
+    <h4>Дополнительно</h4>
+    <p><strong>Куда направляется:</strong> {{ doc.destination|default:"Не указано" }}</p>
+    <p><strong>Приложения:</strong> {{ doc.attachments|default:"Нет" }}</p>
+    <p><strong>Источник информации:</strong> {{ doc.information_source|default:"Не указан" }}</p>
+  </div>
+
+  <hr>
+
+  <a href="{% url 'document_list' %}" class="btn btn-back">Назад к списку</a>
+  <a href="{% url 'document_download' pk=doc.pk %}" class="btn btn-download">Скачать .docx</a>
+</body>
+</html>

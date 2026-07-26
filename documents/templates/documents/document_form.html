@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ action }} документа</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    label { display: block; margin-top: 12px; font-weight: bold; }
+    input, select, textarea { width: 100%; max-width: 500px; padding: 6px; margin-top: 4px; }
+    .error-list { color: red; font-size: 0.9rem; margin-top: 4px; list-style: none; padding-left: 0; }
+    .non-field-error { margin-top: 20px; padding: 12px; background: #ffebee; color: red; border-radius: 4px; }
+    button { padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    a { text-decoration: none; margin-left: 10px; color: #555; }
+    hr { margin: 24px 0; border: 0; border-top: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>{{ action }}</h1>
+
+  <form method="post">
+    {% csrf_token %}
+
+    <label>Название документа</label>
+    {{ form.title }}
+    {% if form.title.errors %}<ul class="error-list">{{ form.title.errors }}</ul>{% endif %}
+
+    <label>Тип документа *</label>
+    {{ form.doc_type }}
+    {% if form.doc_type.errors %}<ul class="error-list">{{ form.doc_type.errors }}</ul>{% endif %}
+    <small style="color: #666;">* обязательное поле</small>
+
+    <label>Дата *</label>
+    {{ form.date }}
+    {% if form.date.errors %}<ul class="error-list">{{ form.date.errors }}</ul>{% endif %}
+    <small style="color: #666;">* обязательное поле</small>
+
+    <label>Место / адрес</label>
+    {{ form.location }}
+    {% if form.location.errors %}<ul class="error-list">{{ form.location.errors }}</ul>{% endif %}
+
+    <label>Участник (если требуется)</label>
+    {{ form.participant }}
+    {% if form.participant.errors %}<ul class="error-list">{{ form.participant.errors }}</ul>{% endif %}
+
+    <hr>
+
+    <label>Время начала</label>
+    {{ form.start_time }}
+    {% if form.start_time.errors %}<ul class="error-list">{{ form.start_time.errors }}</ul>{% endif %}
+
+    <label>Время окончания</label>
+    {{ form.end_time }}
+    {% if form.end_time.errors %}<ul class="error-list">{{ form.end_time.errors }}</ul>{% endif %}
+
+    <label>Описание объекта (для осмотра)</label>
+    {{ form.object_description }}
+    {% if form.object_description.errors %}<ul class="error-list">{{ form.object_description.errors }}</ul>{% endif %}
+
+    <label>Найденные предметы (для осмотра)</label>
+    {{ form.items_found }}
+    {% if form.items_found.errors %}<ul class="error-list">{{ form.items_found.errors }}</ul>{% endif %}
+
+    <label>Целевое действие (для поручения)</label>
+    {{ form.target_action }}
+    {% if form.target_action.errors %}<ul class="error-list">{{ form.target_action.errors }}</ul>{% endif %}
+
+    <label>Срок исполнения (для поручения)</label>
+    {{ form.deadline }}
+    {% if form.deadline.errors %}<ul class="error-list">{{ form.deadline.errors }}</ul>{% endif %}
+
+    <label>Причина явки (для явки с повинной)</label>
+    {{ form.reason }}
+    {% if form.reason.errors %}<ul class="error-list">{{ form.reason.errors }}</ul>{% endif %}
+
+    <br><br>
+    <button type="submit">Сохранить</button>
+    <a href="{% url 'document_list' %}">Отмена</a>
+  </form>
+
+  {% if form.non_field_errors %}
+    <div class="non-field-error">
+      {{ form.non_field_errors }}
+    </div>
+  {% endif %}
+</body>
+</html>

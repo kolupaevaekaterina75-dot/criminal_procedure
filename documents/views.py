@@ -48,27 +48,19 @@ def document_download(request, pk):
     return response
 
 
-def participant_list(request):
-    participants = Participant.objects.all()
-    return render(
-        request,
-        "documents/participant_list.html",
-        {"participants": participants},
-    )
-
-
+# Используем только CBV для списка участников — это предпочтительный вариант
 class ParticipantList(ListView):
     model = Participant
     template_name = "documents/participant_list.html"
-    context_object_name = "participants"
+    context_object_name = "participants"  # важно: ключ в контексте — participants
 
 
 # Шаг 9: отчёт по количеству документов по участникам
 def report_documents_by_participant(request):
     """
     Возвращает список участников с количеством документов (агрегация).
-    Предполагается, что в модели Participant есть related_name='documents'
-    для связи с Document (ForeignKey).
+    Предполагается, что в модели Document есть ForeignKey на Participant
+    с related_name='documents'.
     """
     participants_with_count = (
         Participant.objects

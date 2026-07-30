@@ -3,7 +3,6 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 
-
 STATUS_CHOICES = [
     ('draft', 'Черновик'),
     ('ready', 'Готов к подписанию'),
@@ -11,6 +10,15 @@ STATUS_CHOICES = [
     ('sent', 'Направлен'),
     ('archived', 'В архиве'),
 ]
+
+# Цвета для ролей (для Шага 10)
+ROLE_COLORS = {
+    'suspect': '#FFB6C1',      # розовый — подозреваемый
+    'victim': '#90EE90',       # светло‑зелёный — потерпевший
+    'witness': '#FFFACD',      # лимонный — свидетель
+    'lawyer': '#ADD8E6',       # голубой — защитник
+    'investigator': '#DCDCDC',  # светло‑серый — следователь
+}
 
 
 class Participant(models.Model):
@@ -70,6 +78,11 @@ class Participant(models.Model):
 
     def __str__(self):
         return f"{self.full_name} ({self.get_role_display()})"
+
+    def get_background_color(self):
+        """Возвращает цвет фона для роли участника (для шаблонов)."""
+        # Если роль не в словаре — белый фон по умолчанию
+        return ROLE_COLORS.get(self.role, '#FFFFFF')
 
     @classmethod
     def register_by_phone(cls, full_name, phone, role, side='other'):

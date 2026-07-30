@@ -1,0 +1,15 @@
+<!-- templates/documents/participant_detail.html -->
+{% extends "base.html" %}
+
+{% block title %}Участник: {{ participant.full_name }}{% endblock %}
+
+{% block content %}
+<h2>{{ participant.full_name }}</h2>
+
+<p>
+    Роль:
+    <span style="background-color: {{ participant.get_background_color }}; padding: 4px 8px; border-radius: 4px;">
+        {{ participant.get_role_display }}
+    </span>
+</p>
+{% endblock %}

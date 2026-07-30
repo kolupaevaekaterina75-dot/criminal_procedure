@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Отчёт: количество документов по участникам</h1>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Участник (ФИО)</th>
+        <th>Роль</th>
+        <th>Количество документов</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in participants %}
+        <tr style="background-color: {% if p.role == 'следователь' %}#e3f2fd{% elif p.role == 'дознаватель' %}#fff3e0{% elif p.role == 'адвокат' %}#e8f5e9{% else %}#f5f5f5{% endif %};">
+          <td>{{ p.full_name|default:"—" }}</td>
+          <td>{{ p.get_role_display|default:"—" }}</td>
+          <td>{{ p.total_documents }}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="3">Нет данных для отчёта.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

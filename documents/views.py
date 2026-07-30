@@ -4,6 +4,7 @@ from .models import Document, Participant
 from .forms import DocumentForm
 from django.views.generic import ListView
 from .docx_constructor import generate_docx_from_document
+from django.db.models import Count
 
 
 def document_list(request):
@@ -28,7 +29,6 @@ def document_create(request):
 
 def document_detail(request, pk):
     doc = get_object_or_404(Document.objects.select_related("participant"), pk=pk)
-    # Было: {"doc": document} — переменная document не определена. Правильно: {"doc": doc}
     return render(request, "documents/document_detail.html", {"doc": doc})
 
 
@@ -57,8 +57,26 @@ def participant_list(request):
     )
 
 
-# Этот класс нужен для URL-маршрута на основе CBV (class-based view)
 class ParticipantList(ListView):
     model = Participant
     template_name = "documents/participant_list.html"
     context_object_name = "participants"
+
+
+# Шаг 9: отчёт по количеству документов по участникам
+def report_documents_by_participant(request):
+    """
+    Возвращает список участников с количеством документов (агрегация).
+    Предполагается, что в модели Participant есть related_name='documents'
+    для связи с Document (ForeignKey).
+    """
+    participants_with_count = (
+        Participant.objects
+        .annotate(total_documents=Count('documents'))
+        .order_by('-total_documents')
+    )
+    return render(
+        request,
+        "documents/report_documents_by_participant.html",
+        {"participants": participants_with_count},
+    )

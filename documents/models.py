@@ -1,7 +1,6 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from datetime import date
 from django.utils import timezone
 
 
@@ -34,6 +33,19 @@ class Participant(models.Model):
     ]
 
     full_name = models.CharField(max_length=255, verbose_name="ФИО")
+    role = models.CharField(
+        max_length=50,
+        choices=ROLE_CHOICES,
+        default='other',
+        verbose_name="Роль"
+    )
+    side = models.CharField(
+        max_length=50,
+        choices=SIDE_CHOICES,
+        default='other',
+        verbose_name="Сторона"
+    )
+
     birth_date = models.DateField(verbose_name="Дата рождения")
     birth_place = models.CharField(max_length=255, verbose_name="Место рождения")
     address = models.TextField(verbose_name="Адрес проживания")
@@ -65,7 +77,11 @@ class Participant(models.Model):
             raise ValidationError({'phone': _('Телефон обязателен для регистрации')})
         obj, created = cls.objects.get_or_create(
             phone=phone.strip(),
-            defaults={'full_name': full_name.strip(), 'role': role, 'side': side}
+            defaults={
+                'full_name': full_name.strip(),
+                'role': role,
+                'side': side,
+            }
         )
         if not created:
             obj.full_name = full_name
@@ -87,7 +103,6 @@ class Participant(models.Model):
 
 
 class DocumentType(models.Model):
-    """Справочник видов уголовно‑процессуальных документов"""
     code = models.SlugField(_('Код'), unique=True, help_text=_('Например: protocol_interrogation, indictment'))
     name = models.CharField(_('Название вида документа'), max_length=255)
     description = models.TextField(_('Описание'), blank=True)
@@ -135,18 +150,18 @@ class Specialist(models.Model):
     def __str__(self):
         return f"{self.full_name} ({self.position})"
 
-def today_date():
+
+def default_issue_date():
     return timezone.now().date()
 
+
 class Document(models.Model):
-    title = models.CharField(max_length=255)
-    created_at = models.DateField(auto_now_add=True)
-    date_created = models.DateTimeField(default=timezone.now)
-    reason = models.TextField()
-    object_description = models.TextField(blank=True, null=True)
-    target_action = models.CharField(max_length=255, blank=True, null=True)
-    items_found = models.TextField(blank=True, null=True)
-    deadline = models.DateField(null=True, blank=True)
+    title = models.CharField(max_length=255, blank=True, null=True, verbose_name="Заголовок")
+    reason = models.TextField(verbose_name="Основание")
+    object_description = models.TextField(blank=True, null=True, verbose_name="Описание объекта")
+    target_action = models.CharField(max_length=255, blank=True, null=True, verbose_name="Целевое действие")
+    items_found = models.TextField(blank=True, null=True, verbose_name="Обнаруженные предметы")
+    deadline = models.DateField(null=True, blank=True, verbose_name="Срок исполнения")
     status = models.CharField(
         _('Статус'),
         max_length=20,
@@ -199,7 +214,7 @@ class Document(models.Model):
     content = models.TextField(_('Содержание документа'), blank=True)
     issue_date = models.DateField(
         _('Дата составления документа'),
-        default=date.today  
+        default=default_issue_date
     )
     creator_full_name = models.CharField(_('ФИО составителя'), max_length=255)
     recipient_position = models.CharField("Должность получателя", max_length=255)
@@ -228,7 +243,7 @@ class Document(models.Model):
     )
 
     place = models.CharField("Место проведения", max_length=255)
-    time = models.TimeField("Время", null=True, blank=True)  # общее время, если не нужны start/end
+    time = models.TimeField("Время", null=True, blank=True)
     start_time = models.TimeField("Время начала", null=True, blank=True)
     end_time = models.TimeField("Время окончания", null=True, blank=True)
 
@@ -280,7 +295,6 @@ class Document(models.Model):
         ordering = ['-issue_date', '-created_at']
 
     def __str__(self):
-        # используем doc_type.name, чтобы было понятно, какой именно документ
         return f"{self.doc_type.name} №{self.case_number} от {self.issue_date}"
 
     def clean(self):

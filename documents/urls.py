@@ -1,15 +1,16 @@
 from django.urls import path
 from . import views
 
+app_name = 'documents'
+
 urlpatterns = [
     # Участники
     path('participants/', views.ParticipantList.as_view(), name='participant_list'),
-    # Если participant_create ещё не создан — закомментируйте эту строку, пока не добавите функцию
-    # path('participants/create/', views.participant_create, name='participant_create'),
+    # path('participants/create/', views.participant_create, name='participant_create'),  # раскомментируй, когда создашь view
 
-    # Документы
-    path('documents/', views.document_list, name='document_list'),
-    path('documents/create/', views.document_create, name='document_create'),
-    path('documents/<int:pk>/', views.document_detail, name='document_detail'),
-    path('documents/<int:pk>/download/', views.document_download, name='document_download'),
+    # Документы: список делаем корневым для /docs/
+    path('', views.document_list, name='document_list'),          # теперь /docs/ → список документов
+    path('create/', views.document_create, name='document_create'),
+    path('<int:pk>/', views.document_detail, name='document_detail'),
+    path('<int:pk>/download/', views.document_download, name='document_download'),
 ]

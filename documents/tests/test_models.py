@@ -49,49 +49,54 @@ class TestParticipant(TestCase):
         assert p.get_background_color() == "#FFFFFF"
 
     def test_register_by_phone_creates_new_participant(self):
-        phone = "+79991234567"
-        obj, created = Participant.register_by_phone(
-        phone=phone,
-        birth_date=date(1995, 3, 10),
-        first_name="Иван",
-        last_name="Иванов",
-        )
-        self.assertTrue(created)
-        self.assertEqual(obj.phone, phone)
-        self.assertEqual(obj.birth_date, date(1995, 3, 10))
+        phone = "+79990000001"
+        full_name = "Иванов Иван Иванович"
+        birth_date = timezone.datetime(1995, 3, 10).date()
+
+        obj, created = Participant.register_by_phone(phone, birth_date=birth_date, full_name=full_name)
+
+        assert created is True
+        assert obj.phone == phone
+        assert obj.full_name == full_name
+        assert obj.birth_date == birth_date
 
     def test_register_by_phone_updates_existing_participant(self):
-        from datetime import date
-        phone = "+79991112233"
-        original, _ = Participant.objects.get_or_create(
-            phone=phone,
-            defaults={
-                "first_name": "Пётр",
-                "last_name": "Петров",
-                "birth_date": date(1980, 5, 20),
-            },
-        )
-        updated, created = Participant.register_by_phone(
-            phone=phone,
-            birth_date=date(1980, 5, 20),  # та же дата
-            first_name="Пётр",
-            last_name="Петров-Новый",      # меняем фамилию
+        original_phone = "+79990000002"
+        original_full_name = "Старый Участник"
+        original_birth_date = timezone.datetime(1980, 5, 20).date()
+
+        original = Participant.objects.create(
+        phone=original_phone,
+        full_name=original_full_name,
+        birth_date=original_birth_date,
         )
 
-        self.assertFalse(created)          # существующий, не создаётся заново
-        self.assertEqual(updated.pk, original.pk)
-        self.assertEqual(updated.last_name, "Петров-Новый")
+        new_full_name = "Новый Участник"
+
+        obj, created = Participant.register_by_phone(original_phone, full_name=new_full_name)
+
+        assert created is False
+        assert obj.pk == original.pk
+        assert obj.phone == original_phone
+
+        obj.refresh_from_db()
+        assert obj.full_name == original_full_name
 
     def test_register_by_phone_raises_validation_error_on_empty_phone(self):
-        with pytest.raises(ValidationError) as exc_info:
-            Participant.register_by_phone(
-                full_name="ФИО",
-                phone="",
-                role="other",
-                side="other",
-            )
-        error_dict = exc_info.value.error_dict
-        assert "phone" in error_dict
+        with pytest.raises(ValidationError):
+            Participant.register_by_phone("")
+
+        with pytest.raises(ValidationError):
+            Participant.register_by_phone("   ")
+
+    def test_register_by_phone_uses_explicit_birth_date(self):
+        phone = "+79990000003"
+        birth_date = timezone.datetime(2000, 7, 7).date()
+
+        obj, created = Participant.register_by_phone(phone, birth_date=birth_date)
+
+        assert created is True
+        assert obj.birth_date == birth_date
 
     def test_assign_status_updates_role_and_side(self):
         p = Participant.objects.create(

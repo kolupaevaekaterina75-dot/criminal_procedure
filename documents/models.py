@@ -86,7 +86,11 @@ class Participant(models.Model):
 
     @classmethod
     def register_by_phone(cls, phone, birth_date=None, **kwargs):
-        # Если birth_date не передан и поле обязательно, подставим дефолт для тестов
+        if not phone or not phone.strip():
+            raise ValidationError(_("Номер телефона обязателен"))
+
+        phone = phone.strip()
+
         if birth_date is None:
             from datetime import date
             birth_date = date(1990, 1, 1)  # фиктивная дата для тестов

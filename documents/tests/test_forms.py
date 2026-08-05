@@ -1,146 +1,160 @@
 import pytest
-from django.core.exceptions import ValidationError
 from documents.forms import DocumentForm
-from documents.models import Document, Participant
+from documents.models import Document, Participant, DocumentType
 
 
 @pytest.mark.django_db
 def test_document_form_required_fields_missing():
     """
-    Проверяем, что при отсутствии title, doc_type, date форма не валидна
-    и выбрасывает ожидаемую ошибку.
+    Проверяем, что при отсутствии title, doc_type, issue_date форма не валидна.
+    Передаём пустой словарь: Django должен выдать ошибки на все обязательные поля.
     """
-    data = {
-        "title": "",
-        "doc_type": "",
-        "date": None,
-    }
+    data = {}  # пустой dict — это «ничего не передано», тогда обязательность сработает корректно
     form = DocumentForm(data=data)
-    assert not form.is_valid()
-    assert "Обязательно заполните название документа, тип и дату." in form.errors.get("__all__", [])
+    assert not form.is_valid(), "Форма должна быть невалидной при отсутствии обязательных полей"
 
-
-@pytest.mark.django_db
-def test_document_form_all_required_present():
-    """
-    Проверяем, что форма валидна, когда title, doc_type, date заполнены.
-    Это покрывает ветку, где общая проверка проходит.
-    """
-    participant = Participant.objects.create(full_name="Иванов И.И.")
-    data = {
-        "title": "Протокол",
-        "doc_type": "inspection_protokol",
-        "date": "2026-08-01",
-        "participant": participant.pk,
-        "location": "ул. Ленина, 1",
-    }
-    form = DocumentForm(data=data)
-    assert form.is_valid()
+    # Ошибки по конкретным полям
+    assert "title" in form.errors, "Должна быть ошибка валидации для поля title"
+    assert "doc_type" in form.errors, "Должна быть ошибка валидации для поля doc_type"
+    assert "issue_date" in form.errors, "Должна быть ошибка валидации для поля issue_date"
 
 
 @pytest.mark.django_db
 def test_document_form_explanation_requires_participant():
     """
-    Для doc_type == 'explanation' обязательно указать participant.
+    Для типа 'explanation' форма должна требовать participant.
+    Это требование должно быть реализовано в clean() формы.
     """
-    data = {
-        "title": "Объяснение",
-        "doc_type": "explanation",
-        "date": "2026-08-01",
-        # participant отсутствует
+    doc_type, _ = DocumentType.objects.get_or_create(
+        code='explanation',
+        defaults={'name': 'Объяснение'}
+    )
+
+    participant, _ = Participant.objects.get_or_create(
+        full_name="Иванов И.И.",
+        defaults={
+            "role": "witness",
+            "side": "other",
+            "birth_date": None,
+            "phone": "79990000001",
+        }
+    )
+
+    # Вариант 1: participant отсутствует — форма невалидна
+    data_no_participant = {
+        "title": "Объяснение без участника",
+        "doc_type": doc_type.pk,
+        "issue_date": "2025-12-10",
+        # participant намеренно не передан
     }
-    form = DocumentForm(data=data)
-    assert not form.is_valid()
-    assert "Для объяснения обязательно укажите участника." in form.errors.get("participant", [])
+    form_no_participant = DocumentForm(data=data_no_participant)
+    assert not form_no_participant.is_valid()
+    assert "participant" in form_no_participant.errors, (
+        "Для объяснения должна быть ошибка по полю participant"
+    )
+
+    # Вариант 2: participant есть — форма валидна (если другие требования выполнены)
+    data_with_participant = {
+        "title": "Валидное объяснение",
+        "doc_type": doc_type.pk,
+        "issue_date": "2025-12-10",
+        "participant": participant.pk,
+    }
+    form_with_participant = DocumentForm(data=data_with_participant)
+    assert form_with_participant.is_valid(), f"Форма не валидна: {form_with_participant.errors}"
 
 
 @pytest.mark.django_db
 def test_document_form_inspection_protokol_requires_location():
     """
-    Для doc_type == 'inspection_protokol' обязательно указать location.
+    Для типа 'inspection_protokol' форма должна требовать location.
     """
-    data = {
-        "title": "Протокол осмотра",
-        "doc_type": "inspection_protokol",
-        "date": "2026-08-01",
-        # location отсутствует
+    doc_type, _ = DocumentType.objects.get_or_create(
+        code='inspection_protokol',
+        defaults={'name': 'Протокол осмотра'}
+    )
+
+    data_no_location = {
+        "title": "Протокол без места",
+        "doc_type": doc_type.pk,
+        "issue_date": "2025-12-10",
+        # location намеренно не передан
     }
-    form = DocumentForm(data=data)
-    assert not form.is_valid()
-    assert "Для протокола осмотра места происшествия обязательно укажите место." in form.errors.get("location", [])
+    form_no_location = DocumentForm(data=data_no_location)
+    assert not form_no_location.is_valid()
+    assert "location" in form_no_location.errors, (
+        "Для протокола осмотра должна быть ошибка по полю location"
+    )
+
+    data_with_location = {
+        "title": "Валидный протокол осмотра",
+        "doc_type": doc_type.pk,
+        "issue_date": "2025-12-10",
+        "location": "ул. Ленина, д. 1",
+    }
+    form_with_location = DocumentForm(data=data_with_location)
+    assert form_with_location.is_valid(), f"Форма не валидна: {form_with_location.errors}"
 
 
 @pytest.mark.django_db
 def test_document_form_orm_instruction_requires_target_action():
     """
-    Для doc_type == 'orm_instruction' обязательно указать target_action.
+    Для типа 'orm_instruction' форма должна требовать target_action.
     """
-    data = {
-        "title": "Поручение",
-        "doc_type": "orm_instruction",
-        "date": "2026-08-01",
-        # target_action отсутствует
+    doc_type, _ = DocumentType.objects.get_or_create(
+        code='orm_instruction',
+        defaults={'name': 'Поручение ОРМ'}
+    )
+
+    data_no_target = {
+        "title": "Поручение без действия",
+        "doc_type": doc_type.pk,
+        "issue_date": "2025-12-10",
+        # target_action намеренно не передан
     }
-    form = DocumentForm(data=data)
-    assert not form.is_valid()
-    assert "Для поручения укажите целевое действие." in form.errors.get("target_action", [])
+    form_no_target = DocumentForm(data=data_no_target)
+    assert not form_no_target.is_valid()
+    assert "target_action" in form_no_target.errors, (
+        "Для поручения должна быть ошибка по полю target_action"
+    )
+
+    data_with_target = {
+        "title": "Валидное поручение ОРМ",
+        "doc_type": doc_type.pk,
+        "issue_date": "2025-12-10",
+        "target_action": "Провести опрос свидетелей",
+    }
+    form_with_target = DocumentForm(data=data_with_target)
+    assert form_with_target.is_valid(), f"Форма не валидна: {form_with_target.errors}"
 
 
 @pytest.mark.django_db
 def test_document_form_voluntary_surrender_requires_reason():
     """
-    Для doc_type == 'voluntary_surrender' обязательно указать reason.
+    Для типа 'voluntary_surrender' форма должна требовать reason.
     """
-    data = {
-        "title": "Явка с повинной",
-        "doc_type": "voluntary_surrender",
-        "date": "2026-08-01",
-        # reason отсутствует
+    doc_type, _ = DocumentType.objects.get_or_create(
+        code='voluntary_surrender',
+        defaults={'name': 'Явка с повинной'}
+    )
+
+    data_no_reason = {
+        "title": "Явка без причины",
+        "doc_type": doc_type.pk,
+        "issue_date": "2025-12-10",
+        # reason намеренно не передан
     }
-    form = DocumentForm(data=data)
-    assert not form.is_valid()
-    assert "Для протокола явки с повинной укажите причину." in form.errors.get("reason", [])
+    form_no_reason = DocumentForm(data=data_no_reason)
+    assert not form_no_reason.is_valid()
+    assert "reason" in form_no_reason.errors, (
+        "Для явки с повинной должна быть ошибка по полю reason"
+    )
 
-
-@pytest.mark.django_db
-def test_document_form_specific_requirements_satisfied():
-    """
-    Проверяем, что когда все специфические требования для типа документа выполнены,
-    форма валидна (и общая проверка тоже проходит).
-    """
-    participant = Participant.objects.create(full_name="Петров П.П.")
-    data_explanation = {
-        "title": "Объяснение Петрова",
-        "doc_type": "explanation",
-        "date": "2026-08-01",
-        "participant": participant.pk,
-    }
-    form_exp = DocumentForm(data=data_explanation)
-    assert form_exp.is_valid()
-
-    data_inspection = {
-        "title": "Осмотр места",
-        "doc_type": "inspection_protokol",
-        "date": "2026-08-01",
-        "location": "г. Москва, ул. Пушкина, д. 10",
-    }
-    form_ins = DocumentForm(data=data_inspection)
-    assert form_ins.is_valid()
-
-    data_orm = {
-        "title": "ОРМ поручение",
-        "doc_type": "orm_instruction",
-        "date": "2026-08-01",
-        "target_action": "Провести опрос свидетелей",
-    }
-    form_orm = DocumentForm(data=data_orm)
-    assert form_orm.is_valid()
-
-    data_surrender = {
-        "title": "Явка с повинной Сидорова",
-        "doc_type": "voluntary_surrender",
-        "date": "2026-08-01",
+    data_with_reason = {
+        "title": "Валидная явка с повинной",
+        "doc_type": doc_type.pk,
+        "issue_date": "2025-12-10",
         "reason": "Сознался в совершении преступления",
     }
-    form_sur = DocumentForm(data=data_surrender)
-    assert form_sur.is_valid()
+    form_with_reason = DocumentForm(data=data_with_reason)
+    assert form_with_reason.is_valid(), f"Форма не валидна: {form_with_reason.errors}"

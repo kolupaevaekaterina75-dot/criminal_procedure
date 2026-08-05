@@ -1,36 +1,45 @@
 from django import forms
-from .models import Document, Participant
+from .models import Document, Participant, DocumentType
+
 
 class DocumentForm(forms.ModelForm):
+    # Явно делаем title обязательным, даже если в модели blank=True
+    title = forms.CharField(required=True, max_length=255)
+
     class Meta:
         model = Document
         fields = [
+            'title',
+            'doc_type',
+            'issue_date',
+            'participant',
+            'location',
             'target_action',
             'object_description',
-            # ...
+            'reason',
         ]
 
     def clean(self):
         cleaned_data = super().clean()
+        doc_type = cleaned_data.get('doc_type')
 
-        title = cleaned_data.get("title")
-        doc_type = cleaned_data.get("doc_type")
-        date = cleaned_data.get("date")
+        # Если тип документа не выбран, дальше проверять нет смысла
+        if not doc_type:
+            return cleaned_data
 
-        if not title or not doc_type or not date:
-            raise forms.ValidationError("Обязательно заполните название документа, тип и дату.")
+        code = doc_type.code
 
-        # Валидация по типу документа
-        if doc_type == "explanation" and not cleaned_data.get("participant"):
-            self.add_error("participant", "Для объяснения обязательно укажите участника.")
+        # Специфичные проверки по типу документа
+        if code == 'explanation' and not cleaned_data.get('participant'):
+            self.add_error('participant', 'Для объяснения обязательно указать участника')
 
-        if doc_type == "inspection_protokol" and not cleaned_data.get("location"):
-            self.add_error("location", "Для протокола осмотра места происшествия обязательно укажите место.")
+        if code == 'inspection_protokol' and not cleaned_data.get('location'):
+            self.add_error('location', 'Для протокола осмотра обязательно указать место')
 
-        if doc_type == "orm_instruction" and not cleaned_data.get("target_action"):
-            self.add_error("target_action", "Для поручения укажите целевое действие.")
+        if code == 'orm_instruction' and not cleaned_data.get('target_action'):
+            self.add_error('target_action', 'Для поручения ОРМ обязательно указать действие')
 
-        if doc_type == "voluntary_surrender" and not cleaned_data.get("reason"):
-            self.add_error("reason", "Для протокола явки с повинной укажите причину.")
+        if code == 'voluntary_surrender' and not cleaned_data.get('reason'):
+            self.add_error('reason', 'Для явки с повинной обязательно указать причину')
 
         return cleaned_data

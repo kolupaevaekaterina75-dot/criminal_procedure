@@ -4,16 +4,7 @@ from django.utils import timezone
 from django.test import TestCase
 from datetime import date, timedelta
 
-from documents.models import (
-    Participant,
-    DocumentType,
-    Employee,
-    Witness,
-    Specialist,
-    Document,
-    STATUS_CHOICES,
-    ROLE_COLORS,
-)
+from documents.models import Participant, DocumentType, Document, STATUS_CHOICES, ROLE_COLORS
 
 
 class TestParticipant(TestCase):
@@ -60,15 +51,15 @@ class TestParticipant(TestCase):
         assert obj.full_name == full_name
         assert obj.birth_date == birth_date
 
-    def test_register_by_phone_updates_existing_participant(self):
+    def test_register_by_phone_does_not_update_full_name_on_existing(self):
         original_phone = "+79990000002"
         original_full_name = "Старый Участник"
         original_birth_date = timezone.datetime(1980, 5, 20).date()
 
         original = Participant.objects.create(
-        phone=original_phone,
-        full_name=original_full_name,
-        birth_date=original_birth_date,
+            phone=original_phone,
+            full_name=original_full_name,
+            birth_date=original_birth_date,
         )
 
         new_full_name = "Новый Участник"
@@ -79,6 +70,7 @@ class TestParticipant(TestCase):
         assert obj.pk == original.pk
         assert obj.phone == original_phone
 
+        # get_or_create НЕ обновляет существующие поля, поэтому full_name остаётся старым
         obj.refresh_from_db()
         assert obj.full_name == original_full_name
 
@@ -180,35 +172,14 @@ class TestDocumentType(TestCase):
         assert str(dt) == "Протокол допроса"
 
 
-class TestEmployee(TestCase):
-    def test_str_representation(self):
-        e = Employee.objects.create(full_name="Следователь Иванов", position="Следователь", rank="Майор")
-        assert str(e) == "Следователь Иванов"
-
-
-class TestWitness(TestCase):
-    def test_str_representation(self):
-        w = Witness.objects.create(full_name="Понятой Петров", address="Адрес", phone="70000000000")
-        assert str(w) == "Понятой Петров"
-
-
-class TestSpecialist(TestCase):
-    def test_str_representation(self):
-        s = Specialist.objects.create(
-            full_name="Эксперт Сидоров",
-            position="Судебный эксперт",
-            organization="Экспертное бюро",
-            status="draft",
-        )
-        assert str(s) == "Эксперт Сидоров (Судебный эксперт)"
-
-
 class TestDocument(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.doc_type = DocumentType.objects.create(code="inspection_protocol", name="Протокол осмотра")
-        cls.participant = Participant.objects.create(
-            full_name="Участник",
+        cls.doc_type = DocumentType.objects.create(code="inspection_protokol", name="Протокол осмотра")
+
+        # Используем только Participant с нужными ролями
+        cls.main_participant = Participant.objects.create(
+            full_name="Основной участник",
             role="other",
             side="other",
             birth_date=date.today(),
@@ -226,14 +197,85 @@ class TestDocument(TestCase):
             document_number="-",
             signature="-",
         )
-        cls.employee = Employee.objects.create(full_name="Составитель", position="Должность")
-        cls.witness1 = Witness.objects.create(full_name="Понятой 1", address="Адрес 1")
-        cls.witness2 = Witness.objects.create(full_name="Понятой 2", address="Адрес 2")
-        cls.specialist = Specialist.objects.create(
-            full_name="Специалист",
-            position="Позиция",
-            organization="Организация",
-            status="draft",
+
+        cls.witness1 = Participant.objects.create(
+            full_name="Понятой 1",
+            role="witness",
+            side="other",
+            birth_date=date.today(),
+            birth_place="-",
+            address="-",
+            phone="71111111111",
+            citizenship="-",
+            education="-",
+            marital_status="-",
+            employment="-",
+            work_phone="-",
+            military_duty="-",
+            criminal_record="-",
+            document_type="-",
+            document_number="-",
+            signature="-",
+        )
+
+        cls.witness2 = Participant.objects.create(
+            full_name="Понятой 2",
+            role="witness",
+            side="other",
+            birth_date=date.today(),
+            birth_place="-",
+            address="-",
+            phone="72222222222",
+            citizenship="-",
+            education="-",
+            marital_status="-",
+            employment="-",
+            work_phone="-",
+            military_duty="-",
+            criminal_record="-",
+            document_type="-",
+            document_number="-",
+            signature="-",
+        )
+
+        cls.investigator = Participant.objects.create(
+            full_name="Следователь Иванов",
+            role="investigator",
+            side="prosecution",
+            birth_date=date.today(),
+            birth_place="-",
+            address="-",
+            phone="73333333333",
+            citizenship="-",
+            education="-",
+            marital_status="-",
+            employment="-",
+            work_phone="-",
+            military_duty="-",
+            criminal_record="-",
+            document_type="-",
+            document_number="-",
+            signature="-",
+        )
+
+        cls.specialist = Participant.objects.create(
+            full_name="Специалист Петров",
+            role="expert",
+            side="other",
+            birth_date=date.today(),
+            birth_place="-",
+            address="-",
+            phone="74444444444",
+            citizenship="-",
+            education="-",
+            marital_status="-",
+            employment="-",
+            work_phone="-",
+            military_duty="-",
+            criminal_record="-",
+            document_type="-",
+            document_number="-",
+            signature="-",
         )
 
     def test_str_representation(self):
@@ -243,6 +285,7 @@ class TestDocument(TestCase):
             case_number="123",
             article_uk_rf="105 УК РФ",
             doc_type=self.doc_type,
+            participant=self.main_participant,
             witness1=self.witness1,
             witness2=self.witness2,
             creator_full_name="ФИО составителя",
@@ -252,8 +295,8 @@ class TestDocument(TestCase):
             place="Место проведения",
             authority_name="Орган",
             recorded_correctly="Соответствует",
-            author=self.employee,
-            investigator=self.employee,
+            investigator=self.investigator,
+            specialist=self.specialist,
         )
         expected = f"{self.doc_type.name} №123 от {date.today()}"
         assert str(doc) == expected
@@ -265,6 +308,7 @@ class TestDocument(TestCase):
             case_date=date.today() - timedelta(days=1),
             issue_date=date.today(),
             doc_type=self.doc_type,
+            participant=self.main_participant,
             witness1=self.witness1,
             witness2=self.witness2,
             creator_full_name="ФИО составителя",
@@ -274,8 +318,8 @@ class TestDocument(TestCase):
             place="Место проведения",
             authority_name="Орган",
             recorded_correctly="Соответствует",
-            author=self.employee,
-            investigator=self.employee,
+            investigator=self.investigator,
+            specialist=self.specialist,
         )
         # clean() не выбрасывает ошибок
         doc.clean()
@@ -286,6 +330,7 @@ class TestDocument(TestCase):
             case_date=date.today(),
             issue_date=date.today() - timedelta(days=1),  # раньше
             doc_type=self.doc_type,
+            participant=self.main_participant,
             witness1=self.witness1,
             witness2=self.witness2,
             creator_full_name="ФИО составителя",
@@ -295,8 +340,8 @@ class TestDocument(TestCase):
             place="Место проведения",
             authority_name="Орган",
             recorded_correctly="Соответствует",
-            author=self.employee,
-            investigator=self.employee,
+            investigator=self.investigator,
+            specialist=self.specialist,
         )
         with pytest.raises(ValidationError) as exc_info:
             doc.clean()
@@ -310,6 +355,7 @@ class TestDocument(TestCase):
             case_number="456",
             article_uk_rf="228 УК РФ",
             doc_type=self.doc_type,
+            participant=self.main_participant,
             witness1=self.witness1,
             witness2=self.witness2,
             creator_full_name="ФИО составителя",
@@ -319,7 +365,7 @@ class TestDocument(TestCase):
             place="Место проведения",
             authority_name="Орган",
             recorded_correctly="Соответствует",
-            author=self.employee,
-            investigator=self.employee,
+            investigator=self.investigator,
+            specialist=self.specialist,
         )
         assert doc.issue_date == date.today()

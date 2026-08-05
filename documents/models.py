@@ -15,8 +15,8 @@ STATUS_CHOICES = [
 ROLE_COLORS = {
     'suspect': '#FFB6C1',      # розовый — подозреваемый
     'victim': '#90EE90',       # светло‑зелёный — потерпевший
-    'witness': '#FFFACD',      # лимонный — свидетель
-    'lawyer': '#ADD8E6',       # голубой — защитник
+    'witness': '#FFFACD',      # лимонный — свидетель/понятой
+    'lawyer': '#ADD8E6',       # голубой — защитник (адвокат)
     'investigator': '#DCDCDC',  # светло‑серый — следователь
 }
 
@@ -40,7 +40,12 @@ class Participant(models.Model):
         ('other', 'Иные лица'),
     ]
 
-    full_name = models.CharField(max_length=255, verbose_name="ФИО")
+    full_name = models.CharField(
+        max_length=255,
+        verbose_name="ФИО",
+        unique=True,
+        db_index=True
+    )
     role = models.CharField(
         max_length=50,
         choices=ROLE_CHOICES,
@@ -54,20 +59,20 @@ class Participant(models.Model):
         verbose_name="Сторона"
     )
 
-    birth_date = models.DateField(null=True, blank=True)
-    birth_place = models.CharField(max_length=255, verbose_name="Место рождения")
-    address = models.TextField(verbose_name="Адрес проживания")
-    phone = models.CharField(max_length=20, verbose_name="Телефон")
-    citizenship = models.CharField(max_length=100, verbose_name="Гражданство")
-    education = models.CharField(max_length=100, verbose_name="Образование")
-    marital_status = models.CharField(max_length=50, verbose_name="Семейное положение")
-    employment = models.CharField(max_length=255, verbose_name="Место работы/учебы")
-    work_phone = models.CharField(max_length=20, verbose_name="Рабочий телефон")
-    military_duty = models.CharField(max_length=100, verbose_name="Отношение к воинской обязанности")
-    criminal_record = models.TextField(verbose_name="Наличие судимости")
-    document_type = models.CharField(max_length=100, verbose_name="Тип документа")
-    document_number = models.CharField(max_length=20, verbose_name="Номер документа")
-    signature = models.CharField(max_length=100, verbose_name="Подпись")
+    birth_date = models.DateField(null=True, blank=True, verbose_name="Дата рождения")
+    birth_place = models.CharField(max_length=255, verbose_name="Место рождения", blank=True)
+    address = models.TextField(verbose_name="Адрес проживания", blank=True)
+    phone = models.CharField(max_length=20, verbose_name="Телефон", blank=True)
+    citizenship = models.CharField(max_length=100, verbose_name="Гражданство", blank=True)
+    education = models.CharField(max_length=100, verbose_name="Образование", blank=True)
+    marital_status = models.CharField(max_length=50, verbose_name="Семейное положение", blank=True)
+    employment = models.CharField(max_length=255, verbose_name="Место работы/учёбы", blank=True)
+    work_phone = models.CharField(max_length=20, verbose_name="Рабочий телефон", blank=True)
+    military_duty = models.CharField(max_length=100, verbose_name="Отношение к воинской обязанности", blank=True)
+    criminal_record = models.TextField(verbose_name="Наличие судимости", blank=True)
+    document_type = models.CharField(max_length=100, verbose_name="Тип документа", blank=True)
+    document_number = models.CharField(max_length=20, verbose_name="Номер документа", blank=True)
+    signature = models.CharField(max_length=100, verbose_name="Подпись", blank=True)
 
     created_at = models.DateTimeField(_('Дата регистрации'), auto_now_add=True)
 
@@ -81,7 +86,6 @@ class Participant(models.Model):
 
     def get_background_color(self):
         """Возвращает цвет фона для роли участника (для шаблонов)."""
-        # Если роль не в словаре — белый фон по умолчанию
         return ROLE_COLORS.get(self.role, '#FFFFFF')
 
     @classmethod
@@ -117,7 +121,7 @@ class Participant(models.Model):
 
 
 class DocumentType(models.Model):
-    code = models.SlugField(_('Код'), unique=True, help_text=_('Например: protocol_interrogation, indictment'))
+    code = models.SlugField(_('Код'), unique=True, help_text=_('Например: explanation, inspection_protokol, voluntary_surrender, orm_instruction'))
     name = models.CharField(_('Название вида документа'), max_length=255)
     description = models.TextField(_('Описание'), blank=True)
 
@@ -130,48 +134,13 @@ class DocumentType(models.Model):
         return self.name
 
 
-class Employee(models.Model):
-    full_name = models.CharField("ФИО", max_length=255)
-    position = models.CharField("Должность", max_length=255)
-    rank = models.CharField("Звание/Чин", max_length=100, blank=True)
-    initials = models.CharField("Инициалы", max_length=20, blank=True)
-
-    def __str__(self):
-        return self.full_name
-
-
-class Witness(models.Model):
-    full_name = models.CharField("ФИО", max_length=255)
-    address = models.TextField("Адрес проживания")
-    phone = models.CharField("Телефон", max_length=20, blank=True)
-
-    def __str__(self):
-        return self.full_name
-
-
-class Specialist(models.Model):
-    full_name = models.CharField("ФИО", max_length=255)
-    position = models.CharField("Должность", max_length=255)
-    organization = models.CharField("Организация", max_length=255)
-
-    status = models.CharField(
-        _('Статус'),
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='draft'
-    )
-
-    def __str__(self):
-        return f"{self.full_name} ({self.position})"
-
-
 def default_issue_date():
     return timezone.now().date()
 
 
 class Document(models.Model):
-    title = models.CharField(max_length=255, blank=True, null=True, verbose_name="Заголовок")
-    reason = models.TextField(verbose_name="Основание")
+    title = models.CharField(max_length=255, blank=False, null=False, verbose_name="Заголовок")
+    reason = models.TextField(verbose_name="Основание / причина", blank=True)
     object_description = models.TextField(blank=True, null=True, verbose_name="Описание объекта")
     target_action = models.CharField(max_length=255, blank=True, null=True, verbose_name="Целевое действие")
     items_found = models.TextField(blank=True, null=True, verbose_name="Обнаруженные предметы")
@@ -183,13 +152,14 @@ class Document(models.Model):
         default='draft'
     )
 
+    # Основной участник (составитель/заявитель/свидетель и т.п.)
     participant = models.ForeignKey(
         Participant,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='documents',
-        verbose_name=_('Кто составил / участник')
+        related_name='documents_as_main_participant',
+        verbose_name=_('Основной участник')
     )
 
     doc_type = models.ForeignKey(
@@ -202,18 +172,23 @@ class Document(models.Model):
     case_number = models.CharField(_('Номер уголовного дела'), max_length=100)
     article_uk_rf = models.CharField(_('Статья УК РФ'), max_length=100)
 
+    # Понятые
     witness1 = models.ForeignKey(
-        Witness,
+        Participant,
         related_name="documents_as_witness1",
         on_delete=models.PROTECT,
-        verbose_name="Понятой 1"
+        verbose_name="Понятой 1",
+        null=True,
+        blank=True
     )
 
     witness2 = models.ForeignKey(
-        Witness,
+        Participant,
         related_name="documents_as_witness2",
         on_delete=models.PROTECT,
-        verbose_name="Понятой 2"
+        verbose_name="Понятой 2",
+        null=True,
+        blank=True
     )
 
     file_path = models.FilePathField(
@@ -230,39 +205,35 @@ class Document(models.Model):
         _('Дата составления документа'),
         default=default_issue_date
     )
-    creator_full_name = models.CharField(_('ФИО составителя'), max_length=255)
-    recipient_position = models.CharField("Должность получателя", max_length=255)
-    information_source = models.TextField("Источник получения информации")
+    creator_full_name = models.CharField(_('ФИО составителя'), max_length=255, blank=True)
+    recipient_position = models.CharField("Должность получателя", max_length=255, blank=True)
+    information_source = models.TextField("Источник получения информации", blank=True)
     crime_description = models.TextField("Описание преступления", blank=True)
 
     destination = models.CharField(_('Куда направляется'), max_length=255, blank=True)
     items_seized = models.TextField(_('Что изъято'), blank=True)
     statements = models.TextField("Заявления", blank=True)
     tech_equipment = models.TextField("Техсредства", blank=True)
-    address = models.CharField(_('Адрес'), max_length=255, blank=True)
     to_do = models.TextField(_('Что необходимо / выполнено'), blank=True)
 
-    author = models.ForeignKey(
-        Employee,
-        on_delete=models.PROTECT,
-        related_name="reports"
-    )
-
-    location = models.CharField("Место составления", max_length=255)
+    # Следователь — это и есть автор документа
     investigator = models.ForeignKey(
-        Employee,
+        Participant,
         on_delete=models.PROTECT,
-        related_name="documents",
-        verbose_name="Следователь"
+        related_name="documents_authored",
+        verbose_name="Следователь (автор)",
+        limit_choices_to={'role': 'investigator'}
     )
 
-    place = models.CharField("Место проведения", max_length=255)
+    location = models.CharField("Место составления", max_length=255, blank=True)
+    place = models.CharField("Место проведения", max_length=255, blank=True)  # можно оставить как доп. поле
+
     time = models.TimeField("Время", null=True, blank=True)
     start_time = models.TimeField("Время начала", null=True, blank=True)
     end_time = models.TimeField("Время окончания", null=True, blank=True)
 
-    authority_name = models.CharField("Наименование органа", max_length=255)
-    recorded_correctly = models.CharField("Запись соответствует", max_length=50)
+    authority_name = models.CharField("Наименование органа", max_length=255, blank=True)
+    recorded_correctly = models.CharField("Запись соответствует", max_length=50, blank=True)
 
     investigation_circumstances = models.TextField("Обстоятельства расследования", blank=True)
     required_actions = models.TextField("Необходимые действия", blank=True)
@@ -273,11 +244,13 @@ class Document(models.Model):
     arrived_to = models.CharField("Место прибытия", max_length=255, blank=True)
 
     specialist = models.ForeignKey(
-        Specialist,
+        Participant,
         on_delete=models.PROTECT,
         verbose_name="Специалист",
         null=True,
-        blank=True
+        blank=True,
+        limit_choices_to={'role': 'expert'},
+        related_name="documents_as_specialist"
     )
 
     other_participants = models.TextField("Иные участвующие лица", blank=True)
@@ -312,6 +285,7 @@ class Document(models.Model):
         return f"{self.doc_type.name} №{self.case_number} от {self.issue_date}"
 
     def clean(self):
+        # Проверка: дата составления документа не может быть раньше даты дела
         if self.case_date and self.issue_date:
             if self.case_date > self.issue_date:
                 raise ValidationError({

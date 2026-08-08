@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.test import TestCase
 from datetime import date, timedelta
+from freezegun import freeze_time
 
 from documents.models import Participant, DocumentType, Document, STATUS_CHOICES, ROLE_COLORS
 
@@ -28,6 +29,7 @@ class TestParticipant(TestCase):
             document_number="123456",
             signature="Иванов",
         )
+        # Подстрой под свой __str__: если у тебя в модели формат другой, поменяй ожидаемую строку
         assert str(p) == "Иванов Иван Иванович (Подозреваемый)"
 
     def test_get_background_color_valid_role(self):
@@ -35,14 +37,13 @@ class TestParticipant(TestCase):
         assert p.get_background_color() == ROLE_COLORS["suspect"]
 
     def test_get_background_color_unknown_role_default(self):
-        # роль, которой нет в ROLE_COLORS
         p = Participant(role="fake_role")
         assert p.get_background_color() == "#FFFFFF"
 
     def test_register_by_phone_creates_new_participant(self):
         phone = "+79990000001"
         full_name = "Иванов Иван Иванович"
-        birth_date = timezone.datetime(1995, 3, 10).date()
+        birth_date = date(1995, 3, 10)
 
         obj, created = Participant.register_by_phone(phone, birth_date=birth_date, full_name=full_name)
 
@@ -54,7 +55,7 @@ class TestParticipant(TestCase):
     def test_register_by_phone_does_not_update_full_name_on_existing(self):
         original_phone = "+79990000002"
         original_full_name = "Старый Участник"
-        original_birth_date = timezone.datetime(1980, 5, 20).date()
+        original_birth_date = date(1980, 5, 20)
 
         original = Participant.objects.create(
             phone=original_phone,
@@ -64,26 +65,25 @@ class TestParticipant(TestCase):
 
         new_full_name = "Новый Участник"
 
-        obj, created = Participant.register_by_phone(original_phone, full_name=new_full_name)
+        obj, created = Participant.register_by_phone(original_phone, full_name=new_full_name, birth_date=original_birth_date)
 
         assert created is False
         assert obj.pk == original.pk
         assert obj.phone == original_phone
 
-        # get_or_create НЕ обновляет существующие поля, поэтому full_name остаётся старым
         obj.refresh_from_db()
         assert obj.full_name == original_full_name
 
     def test_register_by_phone_raises_validation_error_on_empty_phone(self):
-        with pytest.raises(ValidationError):
-            Participant.register_by_phone("")
+        with self.assertRaises(ValidationError):
+            Participant.register_by_phone("", birth_date=date.today())
 
-        with pytest.raises(ValidationError):
-            Participant.register_by_phone("   ")
+        with self.assertRaises(ValidationError):
+            Participant.register_by_phone("   ", birth_date=date.today())
 
     def test_register_by_phone_uses_explicit_birth_date(self):
         phone = "+79990000003"
-        birth_date = timezone.datetime(2000, 7, 7).date()
+        birth_date = date(2000, 7, 7)
 
         obj, created = Participant.register_by_phone(phone, birth_date=birth_date)
 
@@ -99,7 +99,7 @@ class TestParticipant(TestCase):
             birth_place="Город",
             address="Улица",
             phone="79003334455",
-            citizenship="РФ",
+            citizenship="-",
             education="-",
             marital_status="-",
             employment="-",
@@ -135,9 +135,9 @@ class TestParticipant(TestCase):
             document_number="-",
             signature="-",
         )
-        with pytest.raises(ValidationError) as exc_info:
+        with self.assertRaises(ValidationError) as exc_info:
             p.assign_status(role="invalid_role")
-        error_dict = exc_info.value.error_dict
+        error_dict = exc_info.exception.error_dict
         assert "role" in error_dict
 
     def test_assign_status_raises_validation_on_invalid_side(self):
@@ -160,9 +160,9 @@ class TestParticipant(TestCase):
             document_number="-",
             signature="-",
         )
-        with pytest.raises(ValidationError) as exc_info:
+        with self.assertRaises(ValidationError) as exc_info:
             p.assign_status(side="invalid_side")
-        error_dict = exc_info.value.error_dict
+        error_dict = exc_info.exception.error_dict
         assert "side" in error_dict
 
 
@@ -172,12 +172,12 @@ class TestDocumentType(TestCase):
         assert str(dt) == "Протокол допроса"
 
 
+@freeze_time("2026-08-08")
 class TestDocument(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.doc_type = DocumentType.objects.create(code="inspection_protokol", name="Протокол осмотра")
 
-        # Используем только Participant с нужными ролями
         cls.main_participant = Participant.objects.create(
             full_name="Основной участник",
             role="other",
@@ -280,6 +280,7 @@ class TestDocument(TestCase):
 
     def test_str_representation(self):
         doc = Document.objects.create(
+            title="Протокол осмотра места происшествия",
             reason="Основание",
             case_date=date.today(),
             case_number="123",
@@ -294,7 +295,6 @@ class TestDocument(TestCase):
             location="Место составления",
             place="Место проведения",
             authority_name="Орган",
-            recorded_correctly="Соответствует",
             investigator=self.investigator,
             specialist=self.specialist,
         )
@@ -302,11 +302,12 @@ class TestDocument(TestCase):
         assert str(doc) == expected
 
     def test_clean_valid_dates(self):
-        # case_date <= issue_date — всё ок
         doc = Document(
+            title="Документ",
             reason="Основание",
             case_date=date.today() - timedelta(days=1),
             issue_date=date.today(),
+            case_number="ABC-123",
             doc_type=self.doc_type,
             participant=self.main_participant,
             witness1=self.witness1,
@@ -317,18 +318,18 @@ class TestDocument(TestCase):
             location="Место составления",
             place="Место проведения",
             authority_name="Орган",
-            recorded_correctly="Соответствует",
             investigator=self.investigator,
             specialist=self.specialist,
         )
-        # clean() не выбрасывает ошибок
         doc.clean()
 
     def test_clean_raises_when_issue_date_earlier_than_case_date(self):
         doc = Document(
+            title="Документ",
             reason="Основание",
             case_date=date.today(),
-            issue_date=date.today() - timedelta(days=1),  # раньше
+            issue_date=date.today() - timedelta(days=1),
+            case_number="ABC-456",
             doc_type=self.doc_type,
             participant=self.main_participant,
             witness1=self.witness1,
@@ -339,20 +340,20 @@ class TestDocument(TestCase):
             location="Место составления",
             place="Место проведения",
             authority_name="Орган",
-            recorded_correctly="Соответствует",
             investigator=self.investigator,
             specialist=self.specialist,
         )
-        with pytest.raises(ValidationError) as exc_info:
+        with self.assertRaises(ValidationError) as exc_info:
             doc.clean()
-        error_dict = exc_info.value.error_dict
+        error_dict = exc_info.exception.error_dict
         assert "issue_date" in error_dict
 
     def test_default_issue_date_is_today(self):
         doc = Document.objects.create(
+            title="Документ по умолчанию",
             reason="Основание",
             case_date=date.today(),
-            case_number="456",
+            case_number="DEF-789",
             article_uk_rf="228 УК РФ",
             doc_type=self.doc_type,
             participant=self.main_participant,
@@ -364,8 +365,35 @@ class TestDocument(TestCase):
             location="Место составления",
             place="Место проведения",
             authority_name="Орган",
-            recorded_correctly="Соответствует",
             investigator=self.investigator,
             specialist=self.specialist,
         )
         assert doc.issue_date == date.today()
+
+    def test_clean_requires_case_number(self):
+        doc = Document(
+            title="Без номера дела",
+            reason="Основание",
+            case_date=date.today(),
+            article_uk_rf="105 УК РФ",
+            doc_type=self.doc_type,
+            investigator=self.investigator,
+        )
+        with self.assertRaises(ValidationError) as exc_info:
+            doc.clean()
+        error_dict = exc_info.exception.error_dict
+        assert "case_number" in error_dict
+
+    def test_clean_requires_case_date(self):
+        doc = Document(
+            title="Без даты дела",
+            reason="Основание",
+            case_number="GHI-012",
+            article_uk_rf="105 УК РФ",
+            doc_type=self.doc_type,
+            investigator=self.investigator,
+        )
+        with self.assertRaises(ValidationError) as exc_info:
+            doc.clean()
+        error_dict = exc_info.exception.error_dict
+        assert "case_date" in error_dict

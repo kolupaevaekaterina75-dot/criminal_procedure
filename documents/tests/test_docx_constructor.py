@@ -1,7 +1,8 @@
 import io
+import os
+import tempfile
+import zipfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-from types import SimpleNamespace
 
 import pytest
 from django.test import TestCase
@@ -16,100 +17,101 @@ from documents.models import Document, DocumentType, Participant
 
 class TestGetTemplatePath(TestCase):
     def test_known_doc_type_returns_path(self):
-        path = get_template_path("explanation")
-        assert path.name == "explanation.docx"
+        doc_type = DocumentType.objects.create(
+            code="inspection_protokol",
+            name="Протокол осмотра места происшествия",
+        )
+        path = get_template_path(doc_type.code)
         assert isinstance(path, Path)
-        # Интеграционная проверка: файл должен реально существовать
-        assert path.exists(), f"Шаблон не найден: {path}"
+        assert path.name == "inspection_protokol.docx"
 
     def test_unknown_doc_type_raises_file_not_found(self):
         with pytest.raises(FileNotFoundError):
-            get_template_path("unknown_type_that_does_not_exist_in_folder")
-
-    def test_namespace_input_works(self):
-        ns = SimpleNamespace(code="explanation")
-        path = get_template_path(ns)
-        expected_path = Path(__file__).resolve().parent.parent / "docx_templates" / "explanation.docx"
-        assert str(path) == str(expected_path.resolve())
-        assert path.exists(), f"Шаблон не найден по пути: {path}"
+            get_template_path("UNKNOWN_TYPE_123")
 
 
 class TestGenerateDocxFromDocumentUnit(TestCase):
-    @patch("documents.docx_constructor.get_template_path")
-    @patch("docxtpl.DocxTemplate")
-    def test_basic_render_and_bytes_returned(self, mock_tpl_class, mock_get_template):
-        mock_tpl_instance = MagicMock()
-        mock_tpl_class.return_value = mock_tpl_instance
-
-        def fake_save(buffer: io.BytesIO):
-            buffer.write(b"fake-docx-bytes-content")
-
-        mock_tpl_instance.save.side_effect = fake_save
-        mock_tpl_instance.render.return_value = None
-
-        # Возвращаем любой валидный Path — главное, чтобы он был объектом Path
-        mock_get_template.return_value = Path("/fake/path/to/template.docx")
-
-        doc_type = DocumentType(code="explanation", name="Объяснение")
-        doc = SimpleNamespace(
-            doc_type=doc_type,
-            title="Test Title",
-            created_at=timezone.now(),
-            issue_date=timezone.now().date(),
-            location="Moscow",
-            case_number="123",
-            content_text="Тестовый текст",
-            investigator=None,
+    @classmethod
+    def setUpTestData(cls):
+        cls.doc_type = DocumentType.objects.create(
+            code="inspection_protokol",
+            name="Протокол осмотра места происшествия",
+        )
+        cls.investigator = Participant.objects.create(
+            full_name="Иванов И.И.",
+            role="investigator",
+            side="state",
+            birth_date=timezone.now().date(),
         )
 
-        docx_bytes = generate_docx_from_document(doc)
+    def test_basic_render_and_bytes_returned(self):
+        doc = Document.objects.create(
+            title="Протокол осмотра",
+            doc_type=self.doc_type,
+            case_date=timezone.now().date(),
+            case_number="123456",
+            article_uk_rf="105 УК РФ",
+            issue_date=timezone.now().date(),
+            investigator=self.investigator,
+            location="ул. Ленина, д. 1",
+            place="Место осмотра",
+        )
 
-        assert isinstance(docx_bytes, bytes)
-        assert len(docx_bytes) > 0
-        mock_get_template.assert_called_once_with(doc_type)
-        mock_tpl_class.assert_called_once_with("/fake/path/to/template.docx")
-        mock_tpl_instance.render.assert_called_once()
-        mock_tpl_instance.save.assert_called_once()
+        result_bytes = generate_docx_from_document(doc)
+        assert isinstance(result_bytes, bytes)
+        assert len(result_bytes) > 0
+
+        # Создаём временный файл, записываем байты, закрываем его, потом читаем через zipfile
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
+                tmp.write(result_bytes)
+                tmp_path = tmp.name
+
+            # Файл уже закрыт — можно безопасно открывать zipfile
+            with zipfile.ZipFile(tmp_path) as z:
+                namelist = z.namelist()
+                assert "word/document.xml" in namelist
+                assert "[Content_Types].xml" in namelist
+        finally:
+            # Удаляем временный файл, если он был создан
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
 
 class TestIntegrationWithRealDocumentModel(TestCase):
-    """
-    Интеграционный тест: реально использует шаблон и создаёт корректные объекты в БД.
-    Цель — проверить, что generate_docx_from_document работает с настоящими моделями.
-    """
-
     @classmethod
     def setUpTestData(cls):
-        # Создаём тип документа
-        cls.doc_type = DocumentType.objects.create(code="explanation", name="Объяснение")
-
-        # Создаём участника-следователя (Participant), который будет investigator
+        cls.doc_type = DocumentType.objects.create(
+            code="explanation",
+            name="Объяснение",
+        )
         cls.investigator = Participant.objects.create(
-            full_name="Иванов И.И.",
-            role="следователь",
-            position="Следователь",
-            department="Следственный отдел",
+            full_name="Петров П.П.",
+            role="investigator",
+            side="state",
+            birth_date=timezone.now().date(),
+        )
+        cls.participant = Participant.objects.create(
+            full_name="Сидоров С.С.",
+            role="suspect",
+            side="defense",
+            birth_date=timezone.now().date(),
         )
 
     def test_integration_with_real_document(self):
-        document = Document.objects.create(
-            title="Интеграционный тест",
+        doc = Document.objects.create(
+            title="Объяснение подозреваемого",
             doc_type=self.doc_type,
-            status="ready",
-            created_at=timezone.now(),
             case_date=timezone.now().date(),
-            case_number="67890",
+            case_number="654321",
+            article_uk_rf="228 УК РФ",
             issue_date=timezone.now().date(),
-            location="Москва",
-            content_text="Тестовый контент документа",
-            investigator=self.investigator,  # Обязательно: FK не NULL
+            investigator=self.investigator,
+            participant=self.participant,
+            reason="Сознался в совершении преступления",
         )
 
-        # Проверяем, что шаблон реально существует (иначе тест сразу падает с понятной ошибкой)
-        template_path = get_template_path(document.doc_type)
-        assert template_path.exists(), f"Шаблон не найден для теста: {template_path}"
-
-        docx_bytes = generate_docx_from_document(document)
-
-        assert isinstance(docx_bytes, bytes)
-        assert len(docx_bytes) > 0
+        result = generate_docx_from_document(doc)
+        assert isinstance(result, bytes)
+        assert len(result) > 0

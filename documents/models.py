@@ -18,7 +18,7 @@ ROLE_COLORS = {
     'victim': '#90EE90',       # светло‑зелёный — потерпевший
     'witness': '#FFFACD',      # лимонный — свидетель/понятой
     'lawyer': '#ADD8E6',       # голубой — защитник (адвокат)
-    'investigator': '#DCDCDC',  # светло‑серый — следователь
+    'investigator': '#DCDCDC', # светло‑серый — следователь
 }
 
 
@@ -45,7 +45,6 @@ class Participant(models.Model):
         max_length=255,
         verbose_name=_('ФИО'),
         db_index=True,
-        # unique=False — убираем, чтобы не блокировать полных тёзок
     )
     role = models.CharField(
         max_length=50,
@@ -83,6 +82,7 @@ class Participant(models.Model):
     signature = models.CharField(max_length=100, verbose_name=_('Подпись'), blank=True)
 
     created_at = models.DateTimeField(_('Дата регистрации'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('Дата обновления'), auto_now=True)
 
     class Meta:
         verbose_name = _('Участник уголовного дела')
@@ -128,20 +128,18 @@ class Participant(models.Model):
         if errors:
             raise ValidationError(errors)
 
+        fields_to_update = []
         if role:
             self.role = role
+            fields_to_update.append('role')
         if side:
             self.side = side
+            fields_to_update.append('side')
 
-        self.save(update_fields=['role', 'side', 'updated_at'] if hasattr(self, 'updated_at') else ['role', 'side'])
+        if fields_to_update:
+            self.save(update_fields=fields_to_update)
 
-class Investigator(models.Model):  # <-- добавили эту модель
-    name = models.CharField(max_length=255)
-    badge_number = models.CharField(max_length=50, blank=True, null=True)
 
-    def __str__(self):
-        return self.name
-    
 class DocumentType(models.Model):
     code = models.SlugField(
         _('Код'),
@@ -193,8 +191,9 @@ class Document(models.Model):
         verbose_name=_('Вид документа')
     )
 
-    case_date = models.DateField(_('Дата дела'))
-    case_number = models.CharField(_('Номер уголовного дела'), max_length=100)
+    # case_date и case_number — обязательные поля (null=False, blank=False)
+    case_date = models.DateField(_('Дата дела'), null=False, blank=False)
+    case_number = models.CharField(_('Номер уголовного дела'), max_length=100, null=False, blank=False)
     article_uk_rf = models.CharField(_('Статья УК РФ'), max_length=100)
 
     witness1 = models.ForeignKey(
@@ -214,9 +213,6 @@ class Document(models.Model):
         null=True,
         blank=True
     )
-
-    # file_path убираем: вместо него лучше использовать FileField для реальных файлов
-    # file_path = models.FilePathField(...)
 
     content = models.TextField(_('Содержание документа'), blank=True)
     issue_date = models.DateField(
@@ -250,7 +246,6 @@ class Document(models.Model):
     end_time = models.TimeField(_('Время окончания'), null=True, blank=True)
 
     authority_name = models.CharField(_('Наименование органа'), max_length=255, blank=True)
-    recorded_correctly = models.CharField(_('Запись соответствует'), max_length=50, blank=True)
 
     investigation_circumstances = models.TextField(_('Обстоятельства расследования'), blank=True)
     required_actions = models.TextField(_('Необходимые действия'), blank=True)
@@ -281,7 +276,6 @@ class Document(models.Model):
     examination_methods = models.TextField(_('Методы исследования'), blank=True)
     seized_items = models.TextField(_('Изъятые предметы'), blank=True)
 
-    reading_method = models.CharField(_('Способ ознакомления'), max_length=100, blank=True)
     remarks = models.TextField(_('Замечания участников'), blank=True)
 
     witness1_signature = models.CharField(_('Подпись понятого 1'), max_length=50, blank=True)
@@ -299,10 +293,20 @@ class Document(models.Model):
         ordering = ['-issue_date', '-created_at']
 
     def __str__(self):
-        return f"{self.doc_type.name} №{self.case_number} от {self.issue_date}"
+        # Безопасная версия: если case_number ещё не установлен, используем ID
+        number = self.case_number or f'без номера ({self.id})'
+        return f"{self.doc_type.name} №{number} от {self.issue_date}"
 
     def clean(self):
         super().clean()
+        if not self.case_number:
+            raise ValidationError({
+                'case_number': _('Обязательно укажите номер уголовного дела')
+            })
+        if not self.case_date:
+            raise ValidationError({
+                'case_date': _('Обязательно укажите дату дела')
+            })
         if self.case_date and self.issue_date:
             if self.case_date > self.issue_date:
                 raise ValidationError({
